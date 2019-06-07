@@ -8,10 +8,10 @@ from .const import DOMAIN
 
 
 @callback
-def initialize(hass, client_id, client_secret):
+def initialize(hass, user_id, client_id, client_secret):
     """Initialize a local auth provider."""
     config_flow.register_flow_implementation(
-        hass, DOMAIN, 'configuration.yaml',
+        hass, DOMAIN, user_id, 'configuration.yaml',
         partial(generate_auth_url, client_id),
         partial(resolve_auth_code, hass, client_id, client_secret)
     )

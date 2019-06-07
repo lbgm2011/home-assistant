@@ -33,9 +33,10 @@ DATA_NEST_CONFIG = 'nest_config'
 
 SIGNAL_NEST_UPDATE = 'nest_update'
 
-NEST_CONFIG_FILE = 'nest.conf'
+NEST_CONFIG_FILE = 'nest_{}.conf'
 CONF_CLIENT_ID = 'client_id'
 CONF_CLIENT_SECRET = 'client_secret'
+CONF_USER_ID = 'user_id'
 
 ATTR_ETA = 'eta'
 ATTR_ETA_WINDOW = 'eta_window'
@@ -45,18 +46,27 @@ ATTR_TRIP_ID = 'trip_id'
 AWAY_MODE_AWAY = 'away'
 AWAY_MODE_HOME = 'home'
 
+CONF_DEVICES = 'devices'
+DATA_CONFIGS = 'nest_configs'
+
 SENSOR_SCHEMA = vol.Schema({
     vol.Optional(CONF_MONITORED_CONDITIONS): vol.All(cv.ensure_list),
 })
 
+CREDENTIALS_SCHEMA = vol.Schema({
+    vol.Required(CONF_CLIENT_ID): cv.string,
+    vol.Required(CONF_CLIENT_SECRET): cv.string,
+    vol.Required(CONF_USER_ID): cv.string,
+    vol.Optional(CONF_STRUCTURE): vol.All(cv.ensure_list, [cv.string]),
+    vol.Optional(CONF_SENSORS): SENSOR_SCHEMA,
+    vol.Optional(CONF_BINARY_SENSORS): SENSOR_SCHEMA
+})
+
 CONFIG_SCHEMA = vol.Schema({
     DOMAIN: vol.Schema({
-        vol.Required(CONF_CLIENT_ID): cv.string,
-        vol.Required(CONF_CLIENT_SECRET): cv.string,
-        vol.Optional(CONF_STRUCTURE): vol.All(cv.ensure_list, [cv.string]),
-        vol.Optional(CONF_SENSORS): SENSOR_SCHEMA,
-        vol.Optional(CONF_BINARY_SENSORS): SENSOR_SCHEMA,
-    })
+        vol.Optional(CONF_DEVICES):
+            vol.All(cv.ensure_list, [CREDENTIALS_SCHEMA]),
+    }),
 }, extra=vol.ALLOW_EXTRA)
 
 SET_AWAY_MODE_SCHEMA = vol.Schema({
@@ -100,26 +110,68 @@ def nest_update_event_broker(hass, nest):
 
 async def async_setup(hass, config):
     """Set up Nest components."""
-    if DOMAIN not in config:
+    # if DOMAIN not in config:
+    #     return True
+
+    # conf = config[DOMAIN]
+
+    # _LOGGER.debug('NEST LAOSKA: {}'.format(conf))
+
+    # local_auth.initialize(hass, conf[CONF_CLIENT_ID], conf[CONF_CLIENT_SECRET])
+
+    # filename = config.get(CONF_FILENAME, NEST_CONFIG_FILE)
+    # access_token_cache_file = hass.config.path(filename)
+
+    # hass.async_create_task(hass.config_entries.flow.async_init(
+    #     DOMAIN, context={'source': config_entries.SOURCE_IMPORT},
+    #     data={
+    #         'nest_conf_path': access_token_cache_file,
+    #     }
+    # ))
+
+    # # Store config to be used during entry setup
+    # hass.data[DATA_NEST_CONFIG] = conf
+
+    # return True
+
+    conf = config.get(DOMAIN)
+    if conf is None:
+        conf = {}
+    
+    hass.data[DOMAIN] = {}
+    hass.data[DATA_CONFIGS] = {}
+    configured = set()
+
+    if CONF_DEVICES not in conf:
         return True
+    
+    devices = conf[CONF_DEVICES]
 
-    conf = config[DOMAIN]
+    _LOGGER.debug('NEST_DEVICES {}'.format(devices))
 
-    local_auth.initialize(hass, conf[CONF_CLIENT_ID], conf[CONF_CLIENT_SECRET])
+    for device_conf in devices:
+        user_id = device_conf[CONF_USER_ID]
 
-    filename = config.get(CONF_FILENAME, NEST_CONFIG_FILE)
-    access_token_cache_file = hass.config.path(filename)
+        hass.data[DATA_CONFIGS][user_id] = device_conf
 
-    hass.async_create_task(hass.config_entries.flow.async_init(
-        DOMAIN, context={'source': config_entries.SOURCE_IMPORT},
-        data={
-            'nest_conf_path': access_token_cache_file,
-        }
-    ))
+        _LOGGER.debug(configured)
+        if user_id in configured:
+            continue
 
-    # Store config to be used during entry setup
-    hass.data[DATA_NEST_CONFIG] = conf
+        local_auth.initialize(hass, user_id, device_conf[CONF_CLIENT_ID], device_conf[CONF_CLIENT_SECRET])
+        
+        filename = config.get(CONF_FILENAME, NEST_CONFIG_FILE.format(user_id))
+        access_token_cache_file = hass.config.path(filename)
 
+        _LOGGER.debug('Sending task for {} {} {}'.format(device_conf, filename, access_token_cache_file))
+
+        hass.async_create_task(hass.config_entries.flow.async_init(
+            DOMAIN, context={'source': config_entries.SOURCE_IMPORT},
+            data={
+                'user_id': user_id,
+                'nest_conf_path': access_token_cache_file
+            }
+        ))
     return True
 
 

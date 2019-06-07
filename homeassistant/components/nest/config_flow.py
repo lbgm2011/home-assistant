@@ -20,7 +20,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @callback
-def register_flow_implementation(hass, domain, name, gen_authorize_url,
+def register_flow_implementation(hass, domain, user_id, name, gen_authorize_url,
                                  convert_code):
     """Register a flow implementation.
 
@@ -29,10 +29,14 @@ def register_flow_implementation(hass, domain, name, gen_authorize_url,
     gen_authorize_url: Coroutine function to generate the authorize url.
     convert_code: Coroutine function to convert a code to an access token.
     """
+
     if DATA_FLOW_IMPL not in hass.data:
         hass.data[DATA_FLOW_IMPL] = OrderedDict()
 
-    hass.data[DATA_FLOW_IMPL][domain] = {
+    if domain not in hass.data[DATA_FLOW_IMPL]:
+        hass.data[DATA_FLOW_IMPL][domain] = OrderedDict()
+
+    hass.data[DATA_FLOW_IMPL][domain][user_id] = {
         'domain': domain,
         'name': name,
         'gen_authorize_url': gen_authorize_url,
@@ -58,6 +62,7 @@ class NestFlowHandler(config_entries.ConfigFlow):
     def __init__(self):
         """Initialize the Nest config flow."""
         self.flow_impl = None
+        self.user_id = None
 
     async def async_step_user(self, user_input=None):
         """Handle a flow initialized by the user."""
@@ -95,8 +100,8 @@ class NestFlowHandler(config_entries.ConfigFlow):
         implementation type we expect a pin or an external component to
         deliver the authentication code.
         """
-        flow = self.hass.data[DATA_FLOW_IMPL][self.flow_impl]
-
+        flow = self.hass.data[DATA_FLOW_IMPL][self.flow_impl][self.user_id]
+        
         errors = {}
 
         if user_input is not None:
@@ -138,16 +143,18 @@ class NestFlowHandler(config_entries.ConfigFlow):
 
     async def async_step_import(self, info):
         """Import existing auth from Nest."""
-        if self.hass.config_entries.async_entries(DOMAIN):
-            return self.async_abort(reason='already_setup')
+        #if self.hass.config_entries.async_entries(DOMAIN):
+        #    return self.async_abort(reason='already_setup')
 
         config_path = info['nest_conf_path']
+        user_id = info['user_id']
 
         if not await self.hass.async_add_job(os.path.isfile, config_path):
             self.flow_impl = DOMAIN
+            self.user_id = user_id
             return await self.async_step_link()
 
-        flow = self.hass.data[DATA_FLOW_IMPL][DOMAIN]
+        flow = self.hass.data[DATA_FLOW_IMPL][DOMAIN][user_id]
         tokens = await self.hass.async_add_job(load_json, config_path)
 
         return self._entry_from_tokens(
