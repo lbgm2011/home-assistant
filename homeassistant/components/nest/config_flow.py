@@ -20,6 +20,14 @@ _LOGGER = logging.getLogger(__name__)
 
 
 @callback
+def configured_users(hass):
+    """Return a set of the configured hosts."""
+    for entry in hass.config_entries.async_entries(DOMAIN):
+        _LOGGER.debug('NEST ENTRY {}'.format(entry.data))
+    return set(entry.data['user_id'] for entry
+               in hass.config_entries.async_entries(DOMAIN))
+
+@callback
 def register_flow_implementation(hass, domain, user_id, name, gen_authorize_url,
                                  convert_code):
     """Register a flow implementation.
@@ -38,6 +46,7 @@ def register_flow_implementation(hass, domain, user_id, name, gen_authorize_url,
 
     hass.data[DATA_FLOW_IMPL][domain][user_id] = {
         'domain': domain,
+        'user_id': user_id,
         'name': name,
         'gen_authorize_url': gen_authorize_url,
         'convert_code': convert_code,
@@ -143,8 +152,8 @@ class NestFlowHandler(config_entries.ConfigFlow):
 
     async def async_step_import(self, info):
         """Import existing auth from Nest."""
-        #if self.hass.config_entries.async_entries(DOMAIN):
-        #    return self.async_abort(reason='already_setup')
+        # if self.hass.config_entries.async_entries(DOMAIN):
+        #     return self.async_abort(reason='already_setup')
 
         config_path = info['nest_conf_path']
         user_id = info['user_id']
@@ -168,5 +177,6 @@ class NestFlowHandler(config_entries.ConfigFlow):
             data={
                 'tokens': tokens,
                 'impl_domain': flow['domain'],
+                'user_id': flow['user_id']
             },
         )

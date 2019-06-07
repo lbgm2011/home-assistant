@@ -21,6 +21,7 @@ from homeassistant.helpers.entity import Entity
 
 from .const import DOMAIN
 from . import local_auth
+from .config_flow import configured_users
 
 _CONFIGURING = {}
 _LOGGER = logging.getLogger(__name__)
@@ -140,14 +141,15 @@ async def async_setup(hass, config):
     
     hass.data[DOMAIN] = {}
     hass.data[DATA_CONFIGS] = {}
-    configured = set()
+    configured = configured_users(hass)
+
 
     if CONF_DEVICES not in conf:
         return True
     
     devices = conf[CONF_DEVICES]
 
-    _LOGGER.debug('NEST_DEVICES {}'.format(devices))
+    _LOGGER.debug('NEST_DEVICES {}\n {}'.format(devices, configured))
 
     for device_conf in devices:
         user_id = device_conf[CONF_USER_ID]
